@@ -20,13 +20,16 @@ from .api import FluviusApi, FluviusError
 from .const import (
     CONF_LOOKAHEAD_DAYS,
     CONF_POSTCODE,
+    CONF_RESOLVED_HOURS,
     CONF_SCAN_INTERVAL,
     CONF_STREETS,
     CONF_WERFCODES,
     DEFAULT_LOOKAHEAD_DAYS,
+    DEFAULT_RESOLVED_HOURS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MAX_LOOKAHEAD_DAYS,
+    MAX_RESOLVED_HOURS,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
 )
@@ -36,6 +39,15 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
 _LIST = selector.TextSelector(selector.TextSelectorConfig(multiple=True))
+_HOURS = selector.NumberSelector(
+    selector.NumberSelectorConfig(
+        min=0,
+        max=MAX_RESOLVED_HOURS,
+        step=1,
+        mode=selector.NumberSelectorMode.BOX,
+        unit_of_measurement="hours",
+    )
+)
 _DAYS = selector.NumberSelector(
     selector.NumberSelectorConfig(
         min=0,
@@ -104,6 +116,7 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
                             CONF_STREETS: streets,
                             CONF_WERFCODES: werfcodes,
                             CONF_LOOKAHEAD_DAYS: int(user_input[CONF_LOOKAHEAD_DAYS]),
+                            CONF_RESOLVED_HOURS: int(user_input[CONF_RESOLVED_HOURS]),
                         },
                     )
         return self.async_show_form(
@@ -117,6 +130,9 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
                         vol.Required(
                             CONF_LOOKAHEAD_DAYS, default=DEFAULT_LOOKAHEAD_DAYS
                         ): _DAYS,
+                        vol.Required(
+                            CONF_RESOLVED_HOURS, default=DEFAULT_RESOLVED_HOURS
+                        ): _HOURS,
                     }
                 ),
                 user_input,
@@ -144,6 +160,7 @@ class FluviusOutagesOptions(OptionsFlowWithReload):
                     CONF_STREETS: _clean(user_input.get(CONF_STREETS)),
                     CONF_WERFCODES: _clean(user_input.get(CONF_WERFCODES)),
                     CONF_LOOKAHEAD_DAYS: int(user_input[CONF_LOOKAHEAD_DAYS]),
+                    CONF_RESOLVED_HOURS: int(user_input[CONF_RESOLVED_HOURS]),
                     CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
                 }
             )
@@ -158,6 +175,9 @@ class FluviusOutagesOptions(OptionsFlowWithReload):
                         vol.Required(
                             CONF_LOOKAHEAD_DAYS, default=DEFAULT_LOOKAHEAD_DAYS
                         ): _DAYS,
+                        vol.Required(
+                            CONF_RESOLVED_HOURS, default=DEFAULT_RESOLVED_HOURS
+                        ): _HOURS,
                         vol.Required(
                             CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL
                         ): vol.All(

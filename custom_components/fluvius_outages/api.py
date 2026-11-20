@@ -22,8 +22,6 @@ from .const import (
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from .matching import Outage
-
 _LOGGER = logging.getLogger(__name__)
 
 _KEY_RE = re.compile(r'"subscription_key"\s*:\s*"([0-9A-Za-z]{16,64})"')
@@ -92,21 +90,16 @@ class FluviusApi:
                 raise FluviusError(f"Fluvius request failed: {err}") from err
         raise FluviusError("Fluvius keeps refusing the API key")  # pragma: no cover
 
-    async def interruptions(
-        self, now: datetime, lookahead_days: int = MAX_LOOKAHEAD_DAYS
+    async def _records(
+        self, events: tuple[str, ...], date_from: datetime, date_until: datetime
     ) -> list[dict[str, Any]]:
-        """Return the raw records of ongoing and announced interruptions."""
-        day_end = "T23:59:59"
+        """Return the raw records of some event types within a date window."""
         params = [
             ("InterruptionTypes", "Planned"),
             ("InterruptionTypes", "Unplanned"),
-            # "Update" has not ended yet; "End" is a finished one.
-            ("EventTypes", "Update"),
-            ("DateFrom", (now - LOOKBACK).date().isoformat()),
-            (
-                "DateUntil",
-                (now + timedelta(days=lookahead_days)).date().isoformat() + day_end,
-            ),
+            *(("EventTypes", event) for event in events),
+            ("DateFrom", date_from.date().isoformat()),
+            ("DateUntil", f"{date_until.date().isoformat()}T23:59:59"),
         ]
         data = await self._get(params)
         records = data.get("interruptions")
@@ -114,7 +107,16 @@ class FluviusApi:
             raise FluviusError("Fluvius answered without an interruptions list")
         return records
 
+    async def interruptions(
+        self, now: datetime, lookahead_days: int = MAX_LOOKAHEAD_DAYS
+    ) -> list[dict[str, Any]]:
+        """Return the current and announced interruptions (not the restored ones)."""
+        return await self._records(
+            ("New", "Update"),
+            now - LOOKBACK,
+            now + timedelta(days=lookahead_days),
+        )
 
-def active_or_upcoming(outages: list[Outage], now: datetime) -> list[Outage]:
-    """Drop outages that are over, whatever Fluvius still calls them."""
-    return [o for o in outages if o.end is None or o.end > now]
+    async def resolved(self, now: datetime, hours: int) -> list[dict[str, Any]]:
+        """Return the interruptions restored within the last ``hours``."""
+        return await self._records(("End",), now - timedelta(hours=hours), now)

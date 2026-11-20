@@ -30,6 +30,8 @@ Fluvius shows outages on an [outage map](https://www.fluvius.be/nl/storingen-en-
 |---|---|
 | **Postcode** | Required. Four digits. |
 | **Streets** | Optional, one or more. Only outages touching these streets are reported. Spelling does not need to be exact (`Molenbekstraat` finds `MOLENBEEKSTRAAT`) and a house number is ignored. Leave empty to watch the whole postcode, which is noisy in a big municipality. |
+| **Days ahead** | How far ahead to show planned works: 0 to 14 days, default 7. `0` shows only what is happening right now. |
+| **Show resolved outages for (hours)** | How long an outage stays visible, with its details, after the power is back: 0 to 168 hours, default 24. `0` turns it off. |
 | **Work codes** | Optional. Fluvius gives every job a *werfcode*, printed on the notice in your letterbox. Outages with a listed code are always reported, wherever they are. |
 
 You can add the integration more than once, for example for your home and your parents' house. Streets, work codes and the update interval can be changed later under **Configure**.
@@ -43,8 +45,9 @@ Each watched location is one service device with:
 | `binary_sensor` **Power outage** | On while a planned or unplanned outage covers the location. Attributes: `type` (`planned` / `unplanned`), `start`, `end`, `werfcode`, `customers_affected`, `customers_restored`, `streets`. |
 | `binary_sensor` **Planned outage upcoming** | On from the moment planned works are announced for the location until they start. How early depends on the *Days ahead* setting. Same attributes as the next planned outage. |
 | `sensor` **Next planned outage** | Start time of the next planned outage that has not begun, with the same attributes. |
+| `sensor` **Last resolved outage** | When power was last restored at the location, for as long as the *resolved* setting says. Attributes say what it was: `type`, `start`, `end`, `duration_minutes`, `customers_affected`, `customers_restored`, `streets`, `cities`, `werfcode`. Unknown on a quiet day. |
 | `sensor` **Power expected back** | End of the outage under way. Unknown for an unplanned outage: Fluvius has no end time until the power is restored. |
-| `calendar` **Outages** | Every announced outage as a calendar event. |
+| `calendar` **Outages** | Every announced outage as a calendar event, and recently resolved ones marked *(resolved)*. |
 
 **On a UPS?** *Power outage* reports what Fluvius says about your street, independent of your own mains. If your cluster runs on a UPS it tells you why the lights are about to go out, and `customers_affected`, `customers_restored`, `start` and `end` describe the outage while it lasts (Fluvius gives no end time for an unplanned one until it is fixed).
 
@@ -88,13 +91,15 @@ automation:
 
 ## How it works
 
-- Every 10 minutes (configurable, 5 minutes at the very least) the integration asks Fluvius for all ongoing and announced outages and keeps the ones that match your location. Matching happens inside Home Assistant: **your postcode and street are never sent to Fluvius**.
+- Every 5 minutes (configurable up to an hour) the integration asks Fluvius for all current and announced outages and keeps the ones that match your location. Five minutes is what Fluvius's own outage map does, so asking less often delays warnings for nothing. Matching happens inside Home Assistant: **your postcode and street are never sent to Fluvius**.
+- Fluvius files every outage under its latest event: *New*, *Update* or *End*. Current outages are *New* and *Update*; restored ones are *End*. The resolved list is bulky and changes slowly, so it is fetched at most every 15 minutes, or at once when an outage that was current disappears, so "power is back" shows up on the next poll.
 - Fluvius's website hands every visitor the same public key for this data. The integration reads it from the outage page itself and fetches a new one if it is refused, so there is no key to configure.
 - An outage counts as *under way* between its start and end time. An unplanned outage with no end stays under way until Fluvius reports it as restored.
 
 ## Limitations
 
 - **Unofficial interface.** This is the endpoint behind Fluvius's own website, not a documented API. Fluvius can change or block it. If the integration stops working, check the logs and open an issue.
+- **Resolved outages** are only as old as Fluvius still lists them, and the retention is capped at a week.
 - **15-day horizon.** Fluvius only answers for dates up to 15 days ahead, so planned works announced earlier appear once they come within 14 days.
 - **Flanders only.** Fluvius covers Flemish distribution; Wallonia and Brussels are served by other operators.
 - Outages are reported per street, not per house. Being in the street does not guarantee your house is affected.

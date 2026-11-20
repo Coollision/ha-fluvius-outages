@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 import re
 from typing import TYPE_CHECKING, Any
@@ -55,6 +55,7 @@ class Outage:
     customers_affected: int
     customers_restored: int
     areas: tuple[Area, ...]
+    ended: bool = False
 
     @property
     def type(self) -> str:
@@ -63,11 +64,24 @@ class Outage:
 
     def is_active(self, now: datetime) -> bool:
         """Return whether the power is (or should be) off at ``now``."""
-        return self.start <= now and (self.end is None or now < self.end)
+        return (
+            not self.ended
+            and self.start <= now
+            and (self.end is None or now < self.end)
+        )
 
     def is_upcoming(self, now: datetime) -> bool:
         """Return whether the outage starts after ``now``."""
-        return self.start > now
+        return not self.ended and self.start > now
+
+    def is_resolved(self, now: datetime, retention: timedelta) -> bool:
+        """Return whether power was restored within the last ``retention``."""
+        return self.ended and self.end is not None and self.end > now - retention
+
+    @property
+    def duration(self) -> timedelta | None:
+        """Return how long the outage lasted or is planned to last, if known."""
+        return self.end - self.start if self.end else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +135,7 @@ def parse_outage(raw: dict[str, Any]) -> Outage | None:
                 )
                 for area in raw.get("impactedAreas") or ()
             ),
+            ended=raw.get("eventType") == "End",
         )
     except KeyError, TypeError, ValueError:
         return None

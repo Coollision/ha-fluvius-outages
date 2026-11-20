@@ -45,11 +45,12 @@ class OutageCalendar(FluviusEntity, CalendarEntity):
         # An unplanned outage has no end yet; keep it on the calendar while it lasts.
         end = outage.end or max(now, outage.start) + OPEN_ENDED_CALENDAR_SPAN
         kind = "Planned" if outage.type == OUTAGE_TYPE_PLANNED else "Unplanned"
+        resolved = " (resolved)" if outage.ended else ""
         streets = ", ".join(self.coordinator.location.touched_streets(outage))
         return CalendarEvent(
             start=outage.start,
             end=end,
-            summary=f"{kind} power outage",
+            summary=f"{kind} power outage{resolved}",
             description=(
                 f"{outage.customers_affected} customers affected. Streets: {streets}. "
                 f"Work code {outage.werfcode}."

@@ -19,6 +19,8 @@ REQUIRED = [
     "config.step.user.data.postcode",
     "config.step.user.data.streets",
     "config.step.user.data.werfcodes",
+    "config.step.user.data.resolved_hours",
+    "config.step.user.data_description.resolved_hours",
     "config.step.user.data.lookahead_days",
     "config.step.user.data_description.lookahead_days",
     "config.error.invalid_postcode",
@@ -27,6 +29,8 @@ REQUIRED = [
     "options.step.init.title",
     "options.step.init.data.streets",
     "options.step.init.data.werfcodes",
+    "options.step.init.data.resolved_hours",
+    "options.step.init.data_description.resolved_hours",
     "options.step.init.data.lookahead_days",
     "options.step.init.data_description.lookahead_days",
     "options.step.init.data.scan_interval",
@@ -34,6 +38,7 @@ REQUIRED = [
     "entity.binary_sensor.outage_upcoming.name",
     "entity.sensor.next_planned_outage.name",
     "entity.sensor.restoration_time.name",
+    "entity.sensor.last_resolved_outage.name",
     "entity.calendar.outages.name",
 ]
 PLACEHOLDERS = {"options.step.init.title": {"postcode"}}
