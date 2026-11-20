@@ -121,10 +121,14 @@ class FluviusCoordinator(DataUpdateCoordinator[tuple[Outage, ...]]):
         now = now or dt_util.utcnow()
         return [o for o in self.outages if o.is_active(now)]
 
+    def upcoming_planned(self, now: datetime | None = None) -> list[Outage]:
+        """Return the planned outages that have not started, soonest first."""
+        now = now or dt_util.utcnow()
+        return [o for o in self.outages if o.planned and o.is_upcoming(now)]
+
     def next_planned(self, now: datetime | None = None) -> Outage | None:
         """Return the next planned outage that has not started."""
-        now = now or dt_util.utcnow()
-        return next((o for o in self.outages if o.planned and o.is_upcoming(now)), None)
+        return next(iter(self.upcoming_planned(now)), None)
 
     def resolved(self, now: datetime | None = None) -> list[Outage]:
         """Return recently restored outages, the most recently restored first."""

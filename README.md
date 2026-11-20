@@ -53,6 +53,25 @@ Each watched location is one service device with:
 
 The binary sensors and the sensors switch at the exact start and end time of an outage, without waiting for the next poll.
 
+### Several outages at once
+
+Fluvius can report more than one outage for a street, for example two unplanned ones at once, or an unexpected outage today while works are planned next week. Each is tracked on its own:
+
+- **Power outage** is on while any is under way. Its headline attributes describe the one under way longest; `outage_count` and the `outages` list describe all of them.
+- **Planned outage upcoming** and **Next planned outage** describe the soonest announced works; `upcoming_count` and the `upcoming` list hold every announced one.
+- **Power expected back** is the latest end time, and unknown while any outage under way has no end yet.
+- **Last resolved outage** shows the most recently restored one; `resolved_count` says how many were restored in the period.
+- The calendar lists every one.
+
+**Planned outage upcoming** stays on while several announcements follow each other, so to be told about each new one, trigger on the `upcoming_count` attribute instead of on the state:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.planned_outage_upcoming # your entity id
+    attribute: upcoming_count
+```
+
 ### Example: warn me as soon as works are announced
 
 ```yaml
