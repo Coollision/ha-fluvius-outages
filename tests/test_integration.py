@@ -256,7 +256,7 @@ async def test_setup_retries_when_fluvius_is_down(
 async def test_diagnostics_hide_the_address(
     hass: HomeAssistant, fluvius: AiohttpClientMocker, entry: MockConfigEntry
 ) -> None:
-    """Diagnostics never contain the postcode, streets or work codes."""
+    """Diagnostics never contain the postcode or the streets."""
     serve(fluvius, record())
     await _setup(hass, entry)
 

@@ -28,13 +28,16 @@ Fluvius shows outages on an [outage map](https://www.fluvius.be/nl/storingen-en-
 
 | Field | |
 |---|---|
-| **Postcode** | Required. Four digits. |
-| **Streets** | Optional, one or more. Only outages touching these streets are reported. Spelling does not need to be exact (`Molenbekstraat` finds `MOLENBEEKSTRAAT`) and a house number is ignored. Leave empty to watch the whole postcode, which is noisy in a big municipality. |
+| **Postal code** | Required. Four digits. |
+| **Street** | Optional. An outage is reported only when it is in your postal code **and** on this street, so a common name like *Kerkweg* never hits other towns. Give no house number. For several streets, separate them with commas. Leave empty to watch the whole postal code, which is noisy in a big municipality. |
 | **Days ahead** | How far ahead to show planned works: 0 to 14 days, default 7. `0` shows only what is happening right now. |
 | **Show resolved outages for (hours)** | How long an outage stays visible, with its details, after the power is back: 0 to 168 hours, default 24. `0` turns it off. |
-| **Work codes** | Optional. Fluvius gives every job a *werfcode*, printed on the notice in your letterbox. Outages with a listed code are always reported, wherever they are. |
 
-You can add the integration more than once, for example for your home and your parents' house. Streets, work codes and the update interval can be changed later under **Configure**.
+**How the street is matched.** Fluvius spells names its own way, so capitals, accents, spaces and hyphens are ignored. Short names must otherwise match exactly (*Kerkstraat* is not *Kerkestraat*); only long names tolerate a typo or variant (`Molenbekstraat` finds `MOLENBEEKSTRAAT`). The street has to be in the same area as the postal code, not just anywhere in a multi-town outage.
+
+Fluvius gives every outage its own work code (*werfcode*), so there is nothing to configure for it; it is shown as an attribute on the sensors.
+
+You can add the integration more than once, for example for your home and your parents' house. Postal code, street and the other settings can be changed later under **Configure**.
 
 ## Entities
 
@@ -125,4 +128,4 @@ automation:
 
 ## Diagnostics
 
-Download diagnostics from the integration page. Your postcode, streets and work codes are redacted.
+Download diagnostics from the integration page. Your postal code and street are redacted.

@@ -31,6 +31,8 @@ def test_normalize_strips_accents_case_and_punctuation() -> None:
         ("Dorp 12", "DORP", True),  # also for short names
         ("Kerkstraat 3b", "Kerkstraat", True),
         ("Kerkstraat 12/2", "Kerkstraat", True),
+        ("Kerkstraat", "Kerkestraat", False),  # short names must match exactly
+        ("Molenweg", "Molenwegel", False),
         ("Kerkstraat", "Kerkplein", False),
         ("Kerkstraat", "Molenstraat", False),
         ("", "Kerkstraat", False),
@@ -98,12 +100,10 @@ def test_open_ended_outage_stays_active() -> None:
         (Location("9000"), True),  # whole postcode
         (Location("9000", ("Andere straat",)), False),
         (Location("9100", ("Teststraat",)), False),  # right street, wrong postcode
-        (Location("9100", (), ("400001",)), True),  # work code wins over postcode
-        (Location("9100", (), ("999999",)), False),
     ],
 )
 def test_location_matches(location: Location, expected: bool) -> None:
-    """A location matches by postcode and street, or by work code."""
+    """A location matches on postcode and street together."""
     outage = parse_outage(record())
     assert outage is not None
     assert location.matches(outage) is expected
@@ -143,3 +143,33 @@ def test_duration() -> None:
     assert parse_outage(record())
     assert parse_outage(record()).duration == timedelta(hours=8, minutes=30)
     assert parse_outage(record(planned=False, end=None)).duration is None
+
+
+def _two_areas() -> dict:
+    """An outage that spans two postcodes: a Kerkweg in one, a Molenweg in the other."""
+    item = record(postcode="9000", streets=("MOLENWEG",))
+    item["impactedAreas"].append(
+        {"city": "ELDERS", "zipCode": "9100", "affectedStreets": ["KERKWEG"]}
+    )
+    return item
+
+
+@pytest.mark.parametrize(
+    ("location", "expected"),
+    [
+        (Location("9100", ("Kerkweg",)), True),
+        (Location("9000", ("Molenweg",)), True),
+        # the street must be in the SAME area as the postcode, not just anywhere
+        (Location("9000", ("Kerkweg",)), False),
+        (Location("9100", ("Molenweg",)), False),
+        # a street name alone can never match: the postcode is always required
+        (Location("9200", ("Kerkweg",)), False),
+    ],
+)
+def test_postcode_and_street_must_both_match_in_the_same_area(
+    location: Location, expected: bool
+) -> None:
+    """A common street name does not hit outages in other postcodes."""
+    outage = parse_outage(_two_areas())
+    assert outage is not None
+    assert location.matches(outage) is expected

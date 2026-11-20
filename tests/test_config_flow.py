@@ -15,7 +15,6 @@ from custom_components.fluvius_outages.const import (
     CONF_RESOLVED_HOURS,
     CONF_SCAN_INTERVAL,
     CONF_STREETS,
-    CONF_WERFCODES,
     DOMAIN,
     PAGE_URL,
 )
@@ -39,7 +38,7 @@ async def _start(hass: HomeAssistant) -> dict:
 async def test_creates_an_entry(
     hass: HomeAssistant, fluvius: AiohttpClientMocker
 ) -> None:
-    """Postcode, streets and work codes end up in the entry; blanks are dropped."""
+    """Postcode and street end up in the entry; the street box splits on commas."""
     result = await _start(hass)
     assert result["type"] is FlowResultType.FORM
 
@@ -47,8 +46,7 @@ async def test_creates_an_entry(
         result["flow_id"],
         {
             CONF_POSTCODE: " 9000 ",
-            CONF_STREETS: ["Teststraat", "  ", "Voorbeeldweg "],
-            CONF_WERFCODES: ["400001"],
+            "street": "Teststraat, ;  Voorbeeldweg ,Teststraat",
         },
     )
 
@@ -57,7 +55,6 @@ async def test_creates_an_entry(
     assert result["data"] == {
         CONF_POSTCODE: "9000",
         CONF_STREETS: ["Teststraat", "Voorbeeldweg"],
-        CONF_WERFCODES: ["400001"],
         CONF_LOOKAHEAD_DAYS: 7,
         CONF_RESOLVED_HOURS: 24,
     }
@@ -109,7 +106,7 @@ async def test_same_location_twice_aborts(
     """The same postcode and street cannot be added twice, however it is spelled."""
     result = await hass.config_entries.flow.async_configure(
         (await _start(hass))["flow_id"],
-        {CONF_POSTCODE: "9000", CONF_STREETS: ["TESTSTRAAT"]},
+        {CONF_POSTCODE: "9000", "street": "TESTSTRAAT"},
     )
 
     assert result["type"] is FlowResultType.ABORT
@@ -130,8 +127,8 @@ async def test_options_change_streets_and_reload(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            CONF_STREETS: ["Anderstraat"],
-            CONF_WERFCODES: [],
+            CONF_POSTCODE: "9000",
+            "street": "Anderstraat",
             CONF_LOOKAHEAD_DAYS: 3,
             CONF_RESOLVED_HOURS: 48,
             CONF_SCAN_INTERVAL: 900,
@@ -181,3 +178,47 @@ async def test_lookahead_cannot_exceed_what_fluvius_serves(
         await hass.config_entries.flow.async_configure(
             result["flow_id"], {CONF_POSTCODE: "9000", CONF_LOOKAHEAD_DAYS: 30}
         )
+
+
+async def test_options_show_what_was_typed_and_can_fix_the_postcode(
+    hass: HomeAssistant, fluvius: AiohttpClientMocker, entry: MockConfigEntry
+) -> None:
+    """The options form shows plain text and lets a wrong postcode be corrected."""
+    await hass.config_entries.async_setup(entry.entry_id)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    schema = result["data_schema"].schema
+    suggested = {
+        str(key): key.description.get("suggested_value")
+        for key in schema
+        if key.description
+    }
+    assert suggested["postcode"] == "9000"
+    assert suggested["street"] == "Teststraat"
+
+    bad = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_POSTCODE: "90",
+            "street": "",
+            CONF_LOOKAHEAD_DAYS: 7,
+            CONF_RESOLVED_HOURS: 24,
+            CONF_SCAN_INTERVAL: 300,
+        },
+    )
+    assert bad["errors"] == {CONF_POSTCODE: "invalid_postcode"}
+
+    good = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_POSTCODE: "9100",
+            "street": "",
+            CONF_LOOKAHEAD_DAYS: 7,
+            CONF_RESOLVED_HOURS: 24,
+            CONF_SCAN_INTERVAL: 300,
+        },
+    )
+    await hass.async_block_till_done()
+    assert good["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.runtime_data.location.postcode == "9100"
+    assert entry.runtime_data.location.streets == ()
