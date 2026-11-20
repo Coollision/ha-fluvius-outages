@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Waar wil je storingsmeldingen?",
+        "description": "Fluvius publiceert geplande en ongeplande stroomonderbrekingen per postcode en straat. Vul je postcode in en, om geen meldingen voor de hele gemeente te krijgen, je straat.",
+        "data": {
+          "postcode": "Postcode",
+          "streets": "Straten",
+          "werfcodes": "Werfcodes",
+          "lookahead_days": "Dagen vooruit"
+        },
+        "data_description": {
+          "postcode": "De postcode van vier cijfers, bijvoorbeeld 9000.",
+          "streets": "Meld enkel onderbrekingen die deze straten raken. De schrijfwijze moet niet exact kloppen. Laat leeg om de hele postcode te volgen.",
+          "werfcodes": "Optioneel. Meld altijd onderbrekingen met deze Fluvius-werfcodes, waar ze ook zijn.",
+          "lookahead_days": "Hoeveel dagen vooruit geplande werken getoond worden. 0 toont enkel onderbrekingen die nu bezig zijn. Fluvius publiceert hooguit 14 dagen vooruit."
+        }
+      }
+    },
+    "error": {
+      "invalid_postcode": "Geef een Belgische postcode van vier cijfers op.",
+      "cannot_connect": "Fluvius is niet bereikbaar. Probeer het later opnieuw."
+    },
+    "abort": {
+      "already_configured": "Deze locatie is al ingesteld."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Storingsmeldingen voor {postcode}",
+        "data": {
+          "streets": "Straten",
+          "werfcodes": "Werfcodes",
+          "scan_interval": "Interval (seconden)",
+          "lookahead_days": "Dagen vooruit"
+        },
+        "data_description": {
+          "streets": "Meld enkel onderbrekingen die deze straten raken. Laat leeg om de hele postcode te volgen.",
+          "werfcodes": "Meld altijd onderbrekingen met deze Fluvius-werfcodes.",
+          "scan_interval": "Hoe vaak Fluvius bevraagd wordt. Wees lief voor hun server: 5 minuten is het minimum.",
+          "lookahead_days": "Hoeveel dagen vooruit geplande werken getoond worden. 0 toont enkel onderbrekingen die nu bezig zijn. Fluvius publiceert hooguit 14 dagen vooruit."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "outage": {
+        "name": "Stroomonderbreking"
+      },
+      "outage_upcoming": {
+        "name": "Geplande onderbreking op komst"
+      }
+    },
+    "sensor": {
+      "next_planned_outage": {
+        "name": "Volgende geplande onderbreking"
+      },
+      "restoration_time": {
+        "name": "Stroom verwacht terug"
+      }
+    },
+    "calendar": {
+      "outages": {
+        "name": "Onderbrekingen"
+      }
+    }
+  }
+}

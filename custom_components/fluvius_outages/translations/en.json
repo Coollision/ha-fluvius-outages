@@ -1,0 +1,71 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Where do you want outage alerts?",
+        "description": "Fluvius publishes planned and unplanned power outages per postcode and street. Fill in your postcode and, to avoid alerts for the whole municipality, your street.",
+        "data": {
+          "postcode": "Postcode",
+          "streets": "Streets",
+          "werfcodes": "Work codes",
+          "lookahead_days": "Days ahead"
+        },
+        "data_description": {
+          "postcode": "The four-digit postcode, for example 9000.",
+          "streets": "Only report outages that touch these streets. Spelling does not need to be exact. Leave empty to watch the whole postcode.",
+          "werfcodes": "Optional. Always report outages with these Fluvius work codes (\"werfcode\"), wherever they are.",
+          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead."
+        }
+      }
+    },
+    "error": {
+      "invalid_postcode": "Enter a four-digit Belgian postcode.",
+      "cannot_connect": "Could not reach Fluvius. Try again later."
+    },
+    "abort": {
+      "already_configured": "This location is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Outage alerts for {postcode}",
+        "data": {
+          "streets": "Streets",
+          "werfcodes": "Work codes",
+          "scan_interval": "Update interval (seconds)",
+          "lookahead_days": "Days ahead"
+        },
+        "data_description": {
+          "streets": "Only report outages that touch these streets. Leave empty to watch the whole postcode.",
+          "werfcodes": "Always report outages with these Fluvius work codes.",
+          "scan_interval": "How often Fluvius is asked. Be kind to their server: 5 minutes is the minimum.",
+          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "outage": {
+        "name": "Power outage"
+      },
+      "outage_upcoming": {
+        "name": "Planned outage upcoming"
+      }
+    },
+    "sensor": {
+      "next_planned_outage": {
+        "name": "Next planned outage"
+      },
+      "restoration_time": {
+        "name": "Power expected back"
+      }
+    },
+    "calendar": {
+      "outages": {
+        "name": "Outages"
+      }
+    }
+  }
+}

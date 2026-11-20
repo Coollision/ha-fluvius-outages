@@ -1,0 +1,47 @@
+"""Constants for Fluvius outages."""
+
+from datetime import timedelta
+from typing import Final
+
+DOMAIN: Final = "fluvius_outages"
+
+CONF_POSTCODE: Final = "postcode"
+CONF_STREETS: Final = "streets"
+CONF_WERFCODES: Final = "werfcodes"
+CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_LOOKAHEAD_DAYS: Final = "lookahead_days"
+
+# The outage map on fluvius.be is fed by this endpoint. It is not a documented API:
+# the page hands every visitor the same key, so we read it from the page too.
+API_URL: Final = (
+    "https://api.fluvius.be/ext/klanten-nuc-interruptions/v1/api/interruptions"
+)
+PAGE_URL: Final = "https://www.fluvius.be/nl/storingen-en-werken/stroomonderbrekingen"
+ORIGIN: Final = "https://www.fluvius.be"
+
+# Ongoing outages stay "Update" until they end. Look back far enough to still see a
+# long-running one. Fluvius refuses a DateUntil more than 15 days ahead, so planned
+# works announced further out only show up once they come within that window.
+LOOKBACK: Final = timedelta(days=7)
+# How far ahead to show planned works. 0 = only what is happening now. Capped below
+# Fluvius's own limit of 15 days.
+DEFAULT_LOOKAHEAD_DAYS: Final = 7
+MAX_LOOKAHEAD_DAYS: Final = 14
+
+DEFAULT_SCAN_INTERVAL: Final = 600
+MIN_SCAN_INTERVAL: Final = 300
+MAX_SCAN_INTERVAL: Final = 3600
+
+REQUEST_TIMEOUT: Final = 30
+
+# How alike two street names must be (0..1) to count as the same street. Fluvius
+# spells names its own way ("Molenbeekstraat"), so an exact match would miss typos.
+STREET_MATCH_RATIO: Final = 0.88
+
+# How long an unplanned outage without a known end is drawn in the calendar.
+OPEN_ENDED_CALENDAR_SPAN: Final = timedelta(hours=1)
+
+OUTAGE_TYPE_PLANNED: Final = "planned"
+OUTAGE_TYPE_UNPLANNED: Final = "unplanned"
+
+CONFIGURATION_URL: Final = PAGE_URL
