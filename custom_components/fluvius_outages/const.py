@@ -7,7 +7,6 @@ DOMAIN: Final = "fluvius_outages"
 
 CONF_POSTCODE: Final = "postcode"
 CONF_STREETS: Final = "streets"
-CONF_WERFCODES: Final = "werfcodes"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_LOOKAHEAD_DAYS: Final = "lookahead_days"
 CONF_RESOLVED_HOURS: Final = "resolved_hours"
@@ -48,7 +47,10 @@ REQUEST_TIMEOUT: Final = 30
 
 # How alike two street names must be (0..1) to count as the same street. Fluvius
 # spells names its own way ("Molenbeekstraat"), so an exact match would miss typos.
-STREET_MATCH_RATIO: Final = 0.88
+STREET_MATCH_RATIO: Final = 0.9
+# Names shorter than this (letters and digits only) must match exactly, so that
+# "Kerkstraat" and "Kerkestraat" stay two streets.
+STREET_FUZZY_MIN_LENGTH: Final = 12
 
 # How long an unplanned outage without a known end is drawn in the calendar.
 OPEN_ENDED_CALENDAR_SPAN: Final = timedelta(hours=1)

@@ -6,14 +6,14 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.diagnostics import async_redact_data
 
-from .const import CONF_POSTCODE, CONF_STREETS, CONF_WERFCODES
+from .const import CONF_POSTCODE, CONF_STREETS
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from . import FluviusConfigEntry
 
-TO_REDACT = {CONF_POSTCODE, CONF_STREETS, CONF_WERFCODES}
+TO_REDACT = {CONF_POSTCODE, CONF_STREETS}
 
 
 async def async_get_config_entry_diagnostics(

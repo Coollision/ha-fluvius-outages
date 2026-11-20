@@ -9,7 +9,12 @@ import re
 from typing import TYPE_CHECKING, Any
 import unicodedata
 
-from .const import OUTAGE_TYPE_PLANNED, OUTAGE_TYPE_UNPLANNED, STREET_MATCH_RATIO
+from .const import (
+    OUTAGE_TYPE_PLANNED,
+    OUTAGE_TYPE_UNPLANNED,
+    STREET_FUZZY_MIN_LENGTH,
+    STREET_MATCH_RATIO,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -26,12 +31,21 @@ def normalize(name: str) -> str:
 
 
 def same_street(a: str, b: str) -> bool:
-    """Return whether two street names are (almost) the same."""
+    """Return whether two street names are the same street.
+
+    Short names must match exactly once spelling is normalised: "Kerkstraat" and
+    "Kerkestraat" are different streets. Only longer names tolerate a typo or a
+    variant spelling, as the odds of two real streets being that alike are tiny.
+    """
     na = normalize(_HOUSE_NUMBER_RE.sub("", a))
     nb = normalize(_HOUSE_NUMBER_RE.sub("", b))
     if not na or not nb:
         return False
-    return na == nb or SequenceMatcher(None, na, nb).ratio() >= STREET_MATCH_RATIO
+    if na == nb:
+        return True
+    if min(len(na), len(nb)) < STREET_FUZZY_MIN_LENGTH:
+        return False
+    return SequenceMatcher(None, na, nb).ratio() >= STREET_MATCH_RATIO
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,16 +100,13 @@ class Outage:
 
 @dataclass(frozen=True, slots=True)
 class Location:
-    """What to watch: a postcode, optionally narrowed to streets or work codes."""
+    """What to watch: a postcode AND, optionally, one of some streets."""
 
     postcode: str
     streets: tuple[str, ...] = ()
-    werfcodes: tuple[str, ...] = ()
 
     def matches(self, outage: Outage) -> bool:
         """Return whether an outage touches this location."""
-        if outage.werfcode in self.werfcodes:
-            return True
         for area in outage.areas:
             if area.postcode != self.postcode:
                 continue

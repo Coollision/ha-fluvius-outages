@@ -1,7 +1,8 @@
-"""Config flow: pick a postcode, optionally narrowed to streets or work codes."""
+"""Config flow: a postal code and, optionally, a street."""
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import (
@@ -23,7 +24,6 @@ from .const import (
     CONF_RESOLVED_HOURS,
     CONF_SCAN_INTERVAL,
     CONF_STREETS,
-    CONF_WERFCODES,
     DEFAULT_LOOKAHEAD_DAYS,
     DEFAULT_RESOLVED_HOURS,
     DEFAULT_SCAN_INTERVAL,
@@ -38,7 +38,10 @@ from .matching import POSTCODE_RE, normalize
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
-_LIST = selector.TextSelector(selector.TextSelectorConfig(multiple=True))
+# A plain text box: a list widget is confusing for one street. Several streets can be
+# given in one box, separated by commas.
+FIELD_STREET = "street"
+_TEXT = selector.TextSelector()
 _HOURS = selector.NumberSelector(
     selector.NumberSelectorConfig(
         min=0,
@@ -59,19 +62,31 @@ _DAYS = selector.NumberSelector(
 )
 
 
-def _clean(values: list[str] | None) -> list[str]:
-    """Strip entries and drop empty ones."""
-    return [v.strip() for v in values or [] if v and v.strip()]
+def _split(text: str | None) -> list[str]:
+    """Split "a, b; c" into ["a", "b", "c"], dropping blanks and repeats."""
+    seen: dict[str, None] = {}
+    for part in re.split(r"[,;\n]", text or ""):
+        if part.strip():
+            seen.setdefault(part.strip(), None)
+    return list(seen)
 
 
-def _unique_id(postcode: str, streets: list[str], werfcodes: list[str]) -> str:
-    return "|".join(
-        (
-            postcode,
-            ",".join(sorted(normalize(s) for s in streets)),
-            ",".join(sorted(werfcodes)),
-        )
-    )
+def _join(values: list[str] | None) -> str:
+    return ", ".join(values or [])
+
+
+def _fields(data: dict[str, Any]) -> dict[str, Any]:
+    """Show stored lists as the text a person would type."""
+    return {
+        CONF_POSTCODE: data.get(CONF_POSTCODE, ""),
+        FIELD_STREET: _join(data.get(CONF_STREETS)),
+    }
+
+
+def _unique_id(postcode: str, streets: list[str]) -> str:
+    # The trailing empty part is where work codes used to go. Keeping it means an
+    # entry made before they were dropped is still recognised as the same location.
+    return "|".join((postcode, ",".join(sorted(normalize(s) for s in streets)), ""))
 
 
 def _title(postcode: str, streets: list[str]) -> str:
@@ -90,8 +105,7 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             postcode = user_input[CONF_POSTCODE].strip()
-            streets = _clean(user_input.get(CONF_STREETS))
-            werfcodes = _clean(user_input.get(CONF_WERFCODES))
+            streets = _split(user_input.get(FIELD_STREET))
             if not POSTCODE_RE.match(postcode):
                 errors[CONF_POSTCODE] = "invalid_postcode"
             else:
@@ -105,16 +119,13 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
                 except FluviusError:
                     errors["base"] = "cannot_connect"
                 else:
-                    await self.async_set_unique_id(
-                        _unique_id(postcode, streets, werfcodes)
-                    )
+                    await self.async_set_unique_id(_unique_id(postcode, streets))
                     self._abort_if_unique_id_configured()
                     return self.async_create_entry(
                         title=_title(postcode, streets),
                         data={
                             CONF_POSTCODE: postcode,
                             CONF_STREETS: streets,
-                            CONF_WERFCODES: werfcodes,
                             CONF_LOOKAHEAD_DAYS: int(user_input[CONF_LOOKAHEAD_DAYS]),
                             CONF_RESOLVED_HOURS: int(user_input[CONF_RESOLVED_HOURS]),
                         },
@@ -124,9 +135,8 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
-                        vol.Required(CONF_POSTCODE): str,
-                        vol.Optional(CONF_STREETS): _LIST,
-                        vol.Optional(CONF_WERFCODES): _LIST,
+                        vol.Required(CONF_POSTCODE): _TEXT,
+                        vol.Optional(FIELD_STREET): _TEXT,
                         vol.Required(
                             CONF_LOOKAHEAD_DAYS, default=DEFAULT_LOOKAHEAD_DAYS
                         ): _DAYS,
@@ -148,30 +158,35 @@ class FluviusOutagesFlow(ConfigFlow, domain=DOMAIN):
 
 
 class FluviusOutagesOptions(OptionsFlowWithReload):
-    """Change the streets, work codes and how often to look."""
+    """Change where to look, what to show and how often."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Edit the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(
-                data={
-                    CONF_STREETS: _clean(user_input.get(CONF_STREETS)),
-                    CONF_WERFCODES: _clean(user_input.get(CONF_WERFCODES)),
-                    CONF_LOOKAHEAD_DAYS: int(user_input[CONF_LOOKAHEAD_DAYS]),
-                    CONF_RESOLVED_HOURS: int(user_input[CONF_RESOLVED_HOURS]),
-                    CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
-                }
-            )
+            postcode = user_input[CONF_POSTCODE].strip()
+            if not POSTCODE_RE.match(postcode):
+                errors[CONF_POSTCODE] = "invalid_postcode"
+            else:
+                return self.async_create_entry(
+                    data={
+                        CONF_POSTCODE: postcode,
+                        CONF_STREETS: _split(user_input.get(FIELD_STREET)),
+                        CONF_LOOKAHEAD_DAYS: int(user_input[CONF_LOOKAHEAD_DAYS]),
+                        CONF_RESOLVED_HOURS: int(user_input[CONF_RESOLVED_HOURS]),
+                        CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL],
+                    }
+                )
         merged = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
                 vol.Schema(
                     {
-                        vol.Optional(CONF_STREETS): _LIST,
-                        vol.Optional(CONF_WERFCODES): _LIST,
+                        vol.Required(CONF_POSTCODE): _TEXT,
+                        vol.Optional(FIELD_STREET): _TEXT,
                         vol.Required(
                             CONF_LOOKAHEAD_DAYS, default=DEFAULT_LOOKAHEAD_DAYS
                         ): _DAYS,
@@ -185,7 +200,8 @@ class FluviusOutagesOptions(OptionsFlowWithReload):
                         ),
                     }
                 ),
-                merged,
+                {**merged, **_fields(merged)} if user_input is None else user_input,
             ),
+            errors=errors,
             description_placeholders={"postcode": merged[CONF_POSTCODE]},
         )

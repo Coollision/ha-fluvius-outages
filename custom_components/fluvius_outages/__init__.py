@@ -10,7 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_integration
 
 from .api import FluviusApi
-from .const import CONF_POSTCODE, CONF_STREETS, CONF_WERFCODES, DOMAIN
+from .const import CONF_POSTCODE, CONF_STREETS, DOMAIN
 from .coordinator import FluviusCoordinator
 from .matching import Location
 
@@ -31,7 +31,6 @@ def location_from_entry(entry: ConfigEntry) -> Location:
     return Location(
         postcode=merged[CONF_POSTCODE],
         streets=tuple(merged.get(CONF_STREETS, ())),
-        werfcodes=tuple(merged.get(CONF_WERFCODES, ())),
     )
 
 

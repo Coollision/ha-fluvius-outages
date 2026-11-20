@@ -15,7 +15,6 @@ from custom_components.fluvius_outages.const import (
     API_URL,
     CONF_POSTCODE,
     CONF_STREETS,
-    CONF_WERFCODES,
     DOMAIN,
     PAGE_URL,
 )
@@ -104,7 +103,6 @@ def entry(hass: HomeAssistant) -> MockConfigEntry:
         data={
             CONF_POSTCODE: "9000",
             CONF_STREETS: ["Teststraat"],
-            CONF_WERFCODES: [],
         },
     )
     config_entry.add_to_hass(hass)
