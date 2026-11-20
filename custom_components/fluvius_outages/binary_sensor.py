@@ -48,10 +48,19 @@ class OutageSensor(FluviusEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Describe the outage that has been going on longest."""
-        if not (active := self.coordinator.active()):
+        """Describe the outage that has been going on longest, and list them all.
+
+        Fluvius can report several outages for one street at once; the headline
+        attributes follow the oldest, ``outages`` holds every one.
+        """
+        coordinator = self.coordinator
+        if not (active := coordinator.active()):
             return None
-        return outage_attributes(self.coordinator, active[0])
+        return {
+            **outage_attributes(coordinator, active[0]),
+            "outage_count": len(active),
+            "outages": [outage_attributes(coordinator, o) for o in active],
+        }
 
 
 class UpcomingOutageSensor(FluviusEntity, BinarySensorEntity):
@@ -73,7 +82,16 @@ class UpcomingOutageSensor(FluviusEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Describe the next planned outage."""
-        if (outage := self.coordinator.next_planned()) is None:
+        """Describe the next planned outage, and list every announced one.
+
+        A new announcement changes ``upcoming_count`` even while the sensor stays
+        on, so an automation can trigger on that attribute.
+        """
+        coordinator = self.coordinator
+        if not (upcoming := coordinator.upcoming_planned()):
             return None
-        return outage_attributes(self.coordinator, outage)
+        return {
+            **outage_attributes(coordinator, upcoming[0]),
+            "upcoming_count": len(upcoming),
+            "upcoming": [outage_attributes(coordinator, o) for o in upcoming],
+        }

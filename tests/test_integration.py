@@ -483,3 +483,197 @@ async def test_resolved_list_is_refreshed_when_a_current_outage_vanishes(
     assert end_requests(fluvius) == 1  # serve() reset the mock; this is the refetch
     assert hass.states.get(OUTAGE).state == "off"
     assert hass.states.get(RESOLVED).state == "2026-11-20T07:40:00+00:00"
+
+
+TWO_UNPLANNED = (
+    record(
+        werfcode="1",
+        planned=False,
+        start="2026-11-20T08:00:00+01:00",
+        end=None,
+        affected=10,
+        streets=("TESTSTRAAT",),
+    ),
+    record(
+        werfcode="2",
+        planned=False,
+        start="2026-11-20T09:00:00+01:00",
+        end=None,
+        affected=40,
+        streets=("TESTSTRAAT", "ANDERSTRAAT"),
+    ),
+)
+
+
+async def test_two_simultaneous_outages_are_both_reported(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Two outages mentioning the street at once: the count and both are visible."""
+    serve(fluvius, *TWO_UNPLANNED)
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+
+    await _setup(hass, entry)
+
+    state = hass.states.get(OUTAGE)
+    assert state.state == "on"
+    assert state.attributes["outage_count"] == 2
+    assert [o["werfcode"] for o in state.attributes["outages"]] == ["1", "2"]
+    assert state.attributes["werfcode"] == "1"  # the one under way longest
+    assert [o["customers_affected"] for o in state.attributes["outages"]] == [10, 40]
+
+
+async def test_expected_back_is_unknown_while_any_outage_has_no_end(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A planned end time must not hide an open-ended unplanned outage."""
+    serve(
+        fluvius,
+        record(werfcode="1"),  # planned, ends 16:00 local
+        record(
+            werfcode="2",
+            planned=False,
+            start="2026-11-20T09:00:00+01:00",
+            end=None,
+        ),
+    )
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+
+    await _setup(hass, entry)
+
+    assert hass.states.get(OUTAGE).attributes["outage_count"] == 2
+    assert hass.states.get(BACK).state == "unknown"
+
+
+async def test_unplanned_now_and_planned_in_a_week_are_independent(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A current outage and announced works both show, each on its own sensor."""
+    serve(
+        fluvius,
+        record(
+            werfcode="1",
+            planned=False,
+            start="2026-11-20T08:00:00+01:00",
+            end=None,
+        ),
+        record(
+            werfcode="2",
+            start="2026-11-27T07:30:00+01:00",
+            end="2026-11-27T16:00:00+01:00",
+        ),
+    )
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+    hass.config_entries.async_update_entry(entry, options={CONF_LOOKAHEAD_DAYS: 14})
+
+    await _setup(hass, entry)
+
+    assert hass.states.get(OUTAGE).state == "on"
+    assert hass.states.get(OUTAGE).attributes["werfcode"] == "1"
+    assert hass.states.get(UPCOMING).state == "on"
+    assert hass.states.get(UPCOMING).attributes["werfcode"] == "2"
+    assert hass.states.get(NEXT).state == "2026-11-27T06:30:00+00:00"
+
+
+async def test_several_announced_outages_are_all_listed(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The next one is the headline, but every announced outage is listed."""
+    serve(
+        fluvius,
+        record(
+            werfcode="2",
+            start="2026-11-24T07:30:00+01:00",
+            end="2026-11-24T12:00:00+01:00",
+        ),
+        record(
+            werfcode="1",
+            start="2026-11-22T07:30:00+01:00",
+            end="2026-11-22T12:00:00+01:00",
+        ),
+    )
+    freezer.move_to(BEFORE)
+
+    await _setup(hass, entry)
+
+    state = hass.states.get(UPCOMING)
+    assert state.attributes["werfcode"] == "1"  # soonest first
+    assert state.attributes["upcoming_count"] == 2
+    assert [o["werfcode"] for o in state.attributes["upcoming"]] == ["1", "2"]
+
+
+async def test_a_second_announcement_can_trigger_an_automation(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The sensor is already on; a new announcement still changes its attributes."""
+    first = record(
+        werfcode="1", start="2026-11-24T07:30:00+01:00", end="2026-11-24T12:00:00+01:00"
+    )
+    serve(fluvius, first)
+    freezer.move_to(BEFORE)
+    await _setup(hass, entry)
+    assert hass.states.get(UPCOMING).attributes["upcoming_count"] == 1
+
+    serve(
+        fluvius,
+        first,
+        record(
+            werfcode="2",
+            start="2026-11-25T07:30:00+01:00",
+            end="2026-11-25T12:00:00+01:00",
+        ),
+    )
+    freezer.tick(timedelta(minutes=6))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(UPCOMING)
+    assert state.state == "on"
+    assert state.attributes["upcoming_count"] == 2
+
+
+async def test_two_resolved_outages_are_counted(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The newest resolved outage is the headline; the count covers both."""
+    serve(
+        fluvius,
+        record(
+            werfcode="1",
+            event="End",
+            planned=False,
+            start="2026-11-20T01:00:00+01:00",
+            end="2026-11-20T02:00:00+01:00",
+        ),
+        record(
+            werfcode="2",
+            event="End",
+            planned=False,
+            start="2026-11-20T08:00:00+01:00",
+            end="2026-11-20T09:00:00+01:00",
+        ),
+    )
+    freezer.move_to("2026-11-20T09:30:00+00:00")
+
+    await _setup(hass, entry)
+
+    state = hass.states.get(RESOLVED)
+    assert state.attributes["werfcode"] == "2"
+    assert state.attributes["resolved_count"] == 2

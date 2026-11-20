@@ -76,9 +76,11 @@ class RestorationTime(FluviusEntity, SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the end of the outage that is under way, if known."""
-        ends = [o.end for o in self.coordinator.active() if o.end]
-        return max(ends) if ends else None
+        """Return when all outages under way end; unknown if any has no end yet."""
+        active = self.coordinator.active()
+        if not active or any(o.end is None for o in active):
+            return None
+        return max(o.end for o in active if o.end)
 
 
 class LastResolvedOutage(FluviusEntity, SensorEntity):
@@ -106,7 +108,10 @@ class LastResolvedOutage(FluviusEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Describe the outage."""
+        """Describe the outage, and say how many were resolved in the period."""
         if (outage := self._outage) is None:
             return None
-        return outage_attributes(self.coordinator, outage)
+        return {
+            **outage_attributes(self.coordinator, outage),
+            "resolved_count": len(self.coordinator.resolved()),
+        }
