@@ -59,8 +59,8 @@ async def test_asks_for_ongoing_interruptions_in_a_window(
 
     url = aioclient_mock.mock_calls[-1][1]
     assert url.query.getall("InterruptionTypes") == ["Planned", "Unplanned"]
-    assert url.query.getall("EventTypes") == ["Update"]
-    assert url.query["DateFrom"] == "2026-11-13"
+    assert url.query.getall("EventTypes") == ["New", "Update"]
+    assert url.query["DateFrom"] == "2026-11-06"
     assert url.query["DateUntil"] == "2026-12-04T23:59:59"
 
 
@@ -166,3 +166,19 @@ async def test_window_follows_the_lookahead(
     await _api(hass).interruptions(NOW, days)
 
     assert aioclient_mock.mock_calls[-1][1].query["DateUntil"] == until
+
+
+async def test_resolved_asks_only_for_restored_outages_in_a_short_window(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Restored outages are a separate, narrow request."""
+    aioclient_mock.get(PAGE_URL, text=PAGE)
+    aioclient_mock.get(API_URL, json={"interruptions": [record(event="End")]})
+
+    records = await _api(hass).resolved(NOW, 24)
+
+    assert len(records) == 1
+    query = aioclient_mock.mock_calls[-1][1].query
+    assert query.getall("EventTypes") == ["End"]
+    assert query["DateFrom"] == "2026-11-19"
+    assert query["DateUntil"] == "2026-11-20T23:59:59"

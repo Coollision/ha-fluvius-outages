@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -115,3 +115,31 @@ def test_touched_streets_only_in_own_postcode() -> None:
     assert outage is not None
     assert Location("9000").touched_streets(outage) == ("TESTSTRAAT", "VOORBEELDWEG")
     assert Location("9100").touched_streets(outage) == ()
+
+
+def test_ended_outage_is_neither_active_nor_upcoming() -> None:
+    """An "End" record is history: it never counts as current or announced."""
+    outage = parse_outage(record(event="End", planned=False))
+    assert outage is not None
+    assert outage.ended
+    assert not outage.is_active(datetime(2026, 11, 20, 10, 0, tzinfo=UTC))
+    assert not outage.is_upcoming(datetime(2026, 11, 20, 5, 0, tzinfo=UTC))
+
+
+def test_resolved_within_retention() -> None:
+    """Resolved means ended, and ended within the retention period."""
+    outage = parse_outage(record(event="End"))  # ended 16:00 local = 15:00 UTC
+    assert outage is not None
+    retention = timedelta(hours=24)
+    assert outage.is_resolved(datetime(2026, 11, 21, 14, 59, tzinfo=UTC), retention)
+    assert not outage.is_resolved(datetime(2026, 11, 21, 15, 1, tzinfo=UTC), retention)
+    assert not outage.is_resolved(
+        datetime(2026, 11, 20, 16, 0, tzinfo=UTC), timedelta(0)
+    )
+
+
+def test_duration() -> None:
+    """The duration is known when there is an end."""
+    assert parse_outage(record())
+    assert parse_outage(record()).duration == timedelta(hours=8, minutes=30)
+    assert parse_outage(record(planned=False, end=None)).duration is None

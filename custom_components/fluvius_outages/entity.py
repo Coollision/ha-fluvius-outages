@@ -40,6 +40,10 @@ def outage_attributes(coordinator: FluviusCoordinator, outage: Outage) -> dict:
         "type": outage.type,
         "start": outage.start.isoformat(),
         "end": outage.end.isoformat() if outage.end else None,
+        "resolved": outage.ended,
+        "duration_minutes": (
+            int(outage.duration.total_seconds() // 60) if outage.duration else None
+        ),
         "werfcode": outage.werfcode,
         "customers_affected": outage.customers_affected,
         "customers_restored": outage.customers_restored,

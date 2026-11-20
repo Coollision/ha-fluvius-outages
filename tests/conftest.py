@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.const import CONF_SCAN_INTERVAL  # noqa: F401
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    AiohttpClientMockResponse,
+)
 
 from custom_components.fluvius_outages.const import (
     API_URL,
@@ -42,6 +45,7 @@ def record(
     streets: tuple[str, ...] = ("TESTSTRAAT", "VOORBEELDWEG"),
     affected: int = 18,
     restored: int = 0,
+    event: str = "Update",
 ) -> dict[str, Any]:
     """Return an API record shaped like the real ones."""
     item: dict[str, Any] = {
@@ -49,7 +53,7 @@ def record(
         "id": f"id-{werfcode}",
         "gonId": werfcode,
         "interruptionType": "Planned" if planned else "Unplanned",
-        "eventType": "Update",
+        "eventType": event,
         "lastUpdateReceivedOn": "2026-11-03T11:29:14.2581039",
         "numberOfAffectedCustomers": affected,
         "numberOfRestoredCustomers": restored,
@@ -80,7 +84,14 @@ def serve(mocker: AiohttpClientMocker, *records: dict[str, Any]) -> None:
     """Replace the interruptions the API returns."""
     mocker.clear_requests()
     mocker.get(PAGE_URL, text=PAGE)
-    mocker.get(API_URL, json={"interruptions": list(records)})
+
+    async def _answer(method: str, url: Any, data: Any) -> AiohttpClientMockResponse:
+        """Answer like Fluvius: only the event types that were asked for."""
+        wanted = set(url.query.getall("EventTypes"))
+        found = [r for r in records if r["eventType"] in wanted]
+        return AiohttpClientMockResponse(method, url, json={"interruptions": found})
+
+    mocker.get(API_URL, side_effect=_answer)
 
 
 @pytest.fixture
@@ -98,3 +109,13 @@ def entry(hass: HomeAssistant) -> MockConfigEntry:
     )
     config_entry.add_to_hass(hass)
     return config_entry
+
+
+def end_requests(mocker: AiohttpClientMocker) -> int:
+    """Count the requests that asked for restored outages."""
+    return sum(
+        1
+        for call in mocker.mock_calls
+        if str(call[1]).startswith(API_URL)
+        and call[1].query.getall("EventTypes") == ["End"]
+    )

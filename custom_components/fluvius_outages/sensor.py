@@ -28,7 +28,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensors."""
     coordinator = entry.runtime_data
-    async_add_entities([NextPlannedOutage(coordinator), RestorationTime(coordinator)])
+    async_add_entities(
+        [
+            NextPlannedOutage(coordinator),
+            RestorationTime(coordinator),
+            LastResolvedOutage(coordinator),
+        ]
+    )
 
 
 class NextPlannedOutage(FluviusEntity, SensorEntity):
@@ -73,3 +79,34 @@ class RestorationTime(FluviusEntity, SensorEntity):
         """Return the end of the outage that is under way, if known."""
         ends = [o.end for o in self.coordinator.active() if o.end]
         return max(ends) if ends else None
+
+
+class LastResolvedOutage(FluviusEntity, SensorEntity):
+    """When power was last restored; the attributes say what the outage was.
+
+    It forgets the outage after the configured number of hours, so it reads
+    "unknown" on a quiet day.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_translation_key = "last_resolved_outage"
+
+    def __init__(self, coordinator: FluviusCoordinator) -> None:
+        """Initialize."""
+        super().__init__(coordinator, "last_resolved_outage")
+
+    @property
+    def _outage(self) -> Outage | None:
+        return next(iter(self.coordinator.resolved()), None)
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the most recently resolved outage ended."""
+        return outage.end if (outage := self._outage) else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Describe the outage."""
+        if (outage := self._outage) is None:
+            return None
+        return outage_attributes(self.coordinator, outage)

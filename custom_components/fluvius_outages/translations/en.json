@@ -8,13 +8,15 @@
           "postcode": "Postcode",
           "streets": "Streets",
           "werfcodes": "Work codes",
-          "lookahead_days": "Days ahead"
+          "lookahead_days": "Days ahead",
+          "resolved_hours": "Show resolved outages for (hours)"
         },
         "data_description": {
           "postcode": "The four-digit postcode, for example 9000.",
           "streets": "Only report outages that touch these streets. Spelling does not need to be exact. Leave empty to watch the whole postcode.",
           "werfcodes": "Optional. Always report outages with these Fluvius work codes (\"werfcode\"), wherever they are.",
-          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead."
+          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead.",
+          "resolved_hours": "How long an outage stays visible after the power is back, with its details. 0 turns this off. Maximum 168 (a week)."
         }
       }
     },
@@ -34,13 +36,15 @@
           "streets": "Streets",
           "werfcodes": "Work codes",
           "scan_interval": "Update interval (seconds)",
-          "lookahead_days": "Days ahead"
+          "lookahead_days": "Days ahead",
+          "resolved_hours": "Show resolved outages for (hours)"
         },
         "data_description": {
           "streets": "Only report outages that touch these streets. Leave empty to watch the whole postcode.",
           "werfcodes": "Always report outages with these Fluvius work codes.",
-          "scan_interval": "How often Fluvius is asked. Be kind to their server: 5 minutes is the minimum.",
-          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead."
+          "scan_interval": "How often Fluvius is asked. Fluvius's own outage map refreshes every 5 minutes, so that is the minimum and the default.",
+          "lookahead_days": "How many days ahead to show planned works. 0 shows only outages happening right now. Fluvius publishes at most 14 days ahead.",
+          "resolved_hours": "How long an outage stays visible after the power is back, with its details. 0 turns this off. Maximum 168 (a week)."
         }
       }
     }
@@ -60,6 +64,9 @@
       },
       "restoration_time": {
         "name": "Power expected back"
+      },
+      "last_resolved_outage": {
+        "name": "Last resolved outage"
       }
     },
     "calendar": {

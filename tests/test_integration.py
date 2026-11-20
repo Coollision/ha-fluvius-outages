@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from custom_components.fluvius_outages.const import (
     API_URL,
     CONF_LOOKAHEAD_DAYS,
+    CONF_RESOLVED_HOURS,
     CONF_SCAN_INTERVAL,
     PAGE_URL,
 )
@@ -20,7 +21,7 @@ from custom_components.fluvius_outages.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 
-from .conftest import PAGE, record, serve
+from .conftest import PAGE, end_requests, record, serve
 
 if TYPE_CHECKING:
     from freezegun.api import FrozenDateTimeFactory
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 OUTAGE = "binary_sensor.9000_teststraat_power_outage"
 UPCOMING = "binary_sensor.9000_teststraat_planned_outage_upcoming"
 NEXT = "sensor.9000_teststraat_next_planned_outage"
+RESOLVED = "sensor.9000_teststraat_last_resolved_outage"
 BACK = "sensor.9000_teststraat_power_expected_back"
 CALENDAR = "calendar.9000_teststraat_outages"
 
@@ -207,6 +209,7 @@ async def test_entities_have_stable_unique_ids(
             "outage_upcoming",
             "next_planned_outage",
             "restoration_time",
+            "last_resolved_outage",
             "calendar",
         )
     }
@@ -291,7 +294,8 @@ async def test_lookahead_limits_planned_works(
     await _setup(hass, entry)
 
     assert hass.states.get(NEXT).state == expected_next
-    until = fluvius.mock_calls[-1][1].query["DateUntil"]
+    current = [c for c in fluvius.mock_calls if "New" in str(c[1])][-1]
+    until = current[1].query["DateUntil"]
     assert until == f"{(datetime(2026, 11, 20) + timedelta(days=days)).date()}T23:59:59"
 
 
@@ -316,3 +320,166 @@ async def test_zero_days_still_reports_what_is_happening_now(
 
     assert hass.states.get(OUTAGE).state == "on"
     assert len(entry.runtime_data.outages) == 2
+
+
+async def test_a_new_outage_is_reported(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Fluvius files a just-started outage under "New"; it must not be missed."""
+    serve(
+        fluvius,
+        record(
+            event="New",
+            planned=False,
+            start="2026-11-20T08:00:00+01:00",
+            end=None,
+        ),
+    )
+    freezer.move_to("2026-11-20T07:30:00+00:00")
+
+    await _setup(hass, entry)
+
+    state = hass.states.get(OUTAGE)
+    assert state.state == "on"
+    assert state.attributes["type"] == "unplanned"
+
+
+RESOLVED_RECORD = {
+    "event": "End",
+    "planned": False,
+    "start": "2026-11-20T08:00:00+01:00",
+    "end": "2026-11-20T09:30:00+01:00",
+    "affected": 21,
+    "restored": 21,
+}
+
+
+async def test_resolved_outage_keeps_its_details(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """After the power is back the outage stays visible, with what Fluvius told."""
+    serve(fluvius, record(**RESOLVED_RECORD))
+    freezer.move_to("2026-11-20T09:00:00+00:00")  # 10:00 local, half an hour later
+
+    await _setup(hass, entry)
+
+    assert hass.states.get(OUTAGE).state == "off"
+    state = hass.states.get(RESOLVED)
+    assert state.state == "2026-11-20T08:30:00+00:00"
+    assert state.attributes["resolved"] is True
+    assert state.attributes["type"] == "unplanned"
+    assert state.attributes["duration_minutes"] == 90
+    assert state.attributes["customers_restored"] == 21
+    assert state.attributes["streets"] == ["TESTSTRAAT", "VOORBEELDWEG"]
+    events = await hass.services.async_call(
+        "calendar",
+        "get_events",
+        {
+            "entity_id": CALENDAR,
+            "start_date_time": "2026-11-20T00:00:00+00:00",
+            "end_date_time": "2026-11-21T00:00:00+00:00",
+        },
+        blocking=True,
+        return_response=True,
+    )
+    [event] = events[CALENDAR]["events"]
+    assert event["summary"] == "Unplanned power outage (resolved)"
+
+
+async def test_resolved_outage_is_forgotten_after_the_retention(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The sensor goes back to unknown 24 hours after the end, without a poll."""
+    serve(fluvius, record(**RESOLVED_RECORD))
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+    await _setup_slow_polling(hass, entry)
+    assert hass.states.get(RESOLVED).state == "2026-11-20T08:30:00+00:00"
+
+    freezer.move_to("2026-11-21T08:31:00+00:00")
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(RESOLVED).state == "unknown"
+
+
+async def test_retention_zero_never_asks_for_resolved_outages(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """With 0 hours the bulky restored list is not even requested."""
+    serve(fluvius, record(**RESOLVED_RECORD))
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+    hass.config_entries.async_update_entry(entry, options={CONF_RESOLVED_HOURS: 0})
+
+    await _setup(hass, entry)
+
+    assert end_requests(fluvius) == 0
+    assert hass.states.get(RESOLVED).state == "unknown"
+
+
+async def test_resolved_list_is_cached_between_polls(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The bulky list is fetched every 15 minutes, not on every 5-minute poll."""
+    serve(fluvius, record(**RESOLVED_RECORD))
+    freezer.move_to("2026-11-20T09:00:00+00:00")
+    await _setup(hass, entry)
+    assert end_requests(fluvius) == 1
+
+    for _ in range(2):  # two polls, 10 minutes: still cached
+        freezer.tick(timedelta(minutes=5))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+    assert end_requests(fluvius) == 1
+
+    freezer.tick(timedelta(minutes=6))  # 16 minutes after the first fetch
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert end_requests(fluvius) == 2
+
+
+async def test_resolved_list_is_refreshed_when_a_current_outage_vanishes(
+    hass: HomeAssistant,
+    fluvius: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """When the outage we showed as current ends, it shows as resolved right away."""
+    ongoing = record(
+        event="Update", planned=False, start="2026-11-20T08:00:00+01:00", end=None
+    )
+    serve(fluvius, ongoing)
+    freezer.move_to("2026-11-20T07:30:00+00:00")
+    await _setup(hass, entry)
+    assert hass.states.get(OUTAGE).state == "on"
+    assert end_requests(fluvius) == 1
+
+    restored = record(
+        event="End",
+        planned=False,
+        start="2026-11-20T08:00:00+01:00",
+        end="2026-11-20T08:40:00+01:00",
+        restored=18,
+    )
+    serve(fluvius, restored)
+    freezer.tick(timedelta(minutes=6))  # next poll, well inside the 15 minutes
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert end_requests(fluvius) == 1  # serve() reset the mock; this is the refetch
+    assert hass.states.get(OUTAGE).state == "off"
+    assert hass.states.get(RESOLVED).state == "2026-11-20T07:40:00+00:00"

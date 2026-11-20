@@ -12,6 +12,7 @@ from custom_components.fluvius_outages.const import (
     API_URL,
     CONF_LOOKAHEAD_DAYS,
     CONF_POSTCODE,
+    CONF_RESOLVED_HOURS,
     CONF_SCAN_INTERVAL,
     CONF_STREETS,
     CONF_WERFCODES,
@@ -58,6 +59,7 @@ async def test_creates_an_entry(
         CONF_STREETS: ["Teststraat", "Voorbeeldweg"],
         CONF_WERFCODES: ["400001"],
         CONF_LOOKAHEAD_DAYS: 7,
+        CONF_RESOLVED_HOURS: 24,
     }
 
 
@@ -131,6 +133,7 @@ async def test_options_change_streets_and_reload(
             CONF_STREETS: ["Anderstraat"],
             CONF_WERFCODES: [],
             CONF_LOOKAHEAD_DAYS: 3,
+            CONF_RESOLVED_HOURS: 48,
             CONF_SCAN_INTERVAL: 900,
         },
     )
@@ -140,6 +143,7 @@ async def test_options_change_streets_and_reload(
     assert entry.runtime_data.location.streets == ("Anderstraat",)
     assert entry.runtime_data.update_interval.total_seconds() == 900
     assert entry.runtime_data.lookahead.days == 3
+    assert entry.runtime_data.retention.total_seconds() == 48 * 3600
 
 
 async def test_options_reject_too_frequent_polling(
