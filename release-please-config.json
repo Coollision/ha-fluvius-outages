@@ -11,7 +11,8 @@
           "path": "custom_components/fluvius_outages/manifest.json",
           "jsonpath": "$.version"
         }
-      ]
+      ],
+      "bump-minor-pre-major": true
     }
   }
 }
